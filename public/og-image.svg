@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#12141a"/>
+  <text x="80" y="260" font-family="Consolas, Menlo, monospace" font-size="150" font-weight="800" fill="#6fa8ff">4 0 4</text>
+  <text x="80" y="340" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="42" font-weight="700" fill="#eaedf3">HTTP Status Reference</text>
+  <text x="80" y="395" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="26" fill="#a4acbc">Every HTTP status code, explained — and how to fix it.</text>
+</svg>

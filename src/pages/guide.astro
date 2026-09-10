@@ -1,0 +1,240 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getStatusCode } from '../data/statusCodes';
+
+const title = 'Which HTTP Status Code Should I Use? — REST API Decision Guide & Cheatsheet';
+const description =
+  'A developer decision guide and cheatsheet for REST APIs: when to use 401 vs 403, 400 vs 422, 200 vs 201 vs 204, 301 vs 308, 404 vs 410, and 502 vs 504.';
+
+const dilemmas = [
+  {
+    title: '401 Unauthorized vs 403 Forbidden',
+    summary: 'The difference between authentication (who you are) and authorization (what you are allowed to do).',
+    codeA: getStatusCode(401)!,
+    codeB: getStatusCode(403)!,
+    rule: 'If logging in with valid credentials could fix the issue, return 401. If the user is already logged in but lacks role/permission, return 403.',
+    table: [
+      { aspect: 'Server knows user identity?', a: 'No (or invalid/expired token)', b: 'Yes (identity is established)' },
+      { aspect: 'Required header', a: 'WWW-Authenticate', b: 'None required' },
+      { aspect: 'Will re-authenticating help?', a: 'Yes (provides valid credentials)', b: 'No (needs higher permissions)' },
+      { aspect: 'Best practice', a: 'Prompt user to log in or refresh token', b: 'Show "Access Denied / Insufficient permissions"' },
+    ],
+  },
+  {
+    title: '400 Bad Request vs 422 Unprocessable Entity',
+    summary: 'The difference between syntax errors (malformed payload) and semantic errors (business validation).',
+    codeA: getStatusCode(400)!,
+    codeB: getStatusCode(422)!,
+    rule: 'Use 400 when the server cannot parse or decode the request body. Use 422 when the JSON/body is valid, but the values violate business rules (e.g. email already exists, age < 0).',
+    table: [
+      { aspect: 'Payload syntax valid?', a: 'No (corrupt JSON, bad encoding)', b: 'Yes (valid syntax and schema)' },
+      { aspect: 'Failure reason', a: 'Malformed structure or missing param', b: 'Semantic validation rule failed' },
+      { aspect: 'RFC status', a: 'RFC 9110 standard', b: 'RFC 9110 standard (originally WebDAV)' },
+      { aspect: 'Common frameworks', a: 'Express / Spring default for parse failure', b: 'Laravel / FastAPI / Rails default for validation' },
+    ],
+  },
+  {
+    title: '200 OK vs 201 Created vs 202 Accepted vs 204 No Content',
+    summary: 'Choosing the correct success response for CRUD and asynchronous operations.',
+    codeA: getStatusCode(201)!,
+    codeB: getStatusCode(204)!,
+    rule: 'POST creating a new resource with a URL? Use 201 + Location header. Action completed with no body to return (like DELETE)? Use 204. Queued for background processing? Use 202. Everything else? Use 200.',
+    table: [
+      { aspect: 'Has response body?', a: '201: Yes (representation of new item)', b: '204: Strictly No body' },
+      { aspect: 'Key response header', a: '201: Location: /items/{id}', b: '204: None required' },
+      { aspect: 'Typical HTTP methods', a: 'POST, occasionally PUT', b: 'DELETE, occasionally POST/PUT' },
+      { aspect: 'Client expectation', a: 'Reads newly assigned ID / URL', b: 'Confirms deletion without parsing JSON' },
+    ],
+  },
+  {
+    title: '301 Moved Permanently vs 302 Found vs 307 vs 308',
+    summary: 'Permanent vs temporary, and whether the HTTP request method can be changed to GET.',
+    codeA: getStatusCode(301)!,
+    codeB: getStatusCode(308)!,
+    rule: 'For permanent moves where POST/PUT must remain POST/PUT, use 308. For standard SEO page moves where browsers can switch to GET, use 301.',
+    table: [
+      { aspect: 'Persistence', a: '301: Permanent (cached indefinitely)', b: '308: Permanent (cached indefinitely)' },
+      { aspect: 'Method rewriting', a: '301: May rewrite POST to GET', b: '308: Strictly preserves POST/PUT/DELETE' },
+      { aspect: 'Temporary sibling', a: '302 Found', b: '307 Temporary Redirect' },
+      { aspect: 'Best for REST APIs', a: 'Website URL migrations', b: 'API endpoints with POST/PUT payloads' },
+    ],
+  },
+  {
+    title: '404 Not Found vs 410 Gone',
+    summary: 'Distinguishing temporary absence from intentional permanent deletion.',
+    codeA: getStatusCode(404)!,
+    codeB: getStatusCode(410)!,
+    rule: 'Use 404 for unknown URLs or IDs that never existed. Use 410 when an API resource was deliberately deleted and will never return, allowing search engines and clients to purge cached links immediately.',
+    table: [
+      { aspect: 'Permanent indicator', a: 'No (might exist in the future)', b: 'Yes (deliberately deleted forever)' },
+      { aspect: 'Search engine effect', a: 'Crawlers recheck repeatedly', b: 'Crawlers remove from index quickly' },
+      { aspect: 'Security use case', a: 'Can hide resource existence', b: 'Explicitly admits resource once existed' },
+    ],
+  },
+  {
+    title: '500 vs 502 vs 503 vs 504',
+    summary: 'Identifying which tier of your architecture caused the server failure.',
+    codeA: getStatusCode(502)!,
+    codeB: getStatusCode(504)!,
+    rule: '500 is your app code crashing. 502 is your proxy/load balancer getting an error from your app. 503 is planned downtime or overload. 504 is your proxy waiting too long for your app to reply.',
+    table: [
+      { aspect: 'Where failure happens', a: '502: Upstream crashed or closed socket', b: '504: Upstream took too long to answer' },
+      { aspect: 'Root cause', a: 'App crash, bad SSL, process killed', b: 'Slow DB query, heavy computation, deadlock' },
+      { aspect: 'Safe to retry?', a: 'Depends on idempotency', b: 'Depends on idempotency' },
+      { aspect: 'Intermediary responsible', a: 'Nginx / Cloudflare / ALB', b: 'Nginx / Cloudflare / ALB' },
+    ],
+  },
+];
+
+const decisionMatrix = [
+  { action: 'Request succeeded and returns a JSON payload', code: 200, name: 'OK', category: 'success', note: 'Standard response for GET, or POST that executes a search/action without creating a resource.' },
+  { action: 'Created a new database record or file', code: 201, name: 'Created', category: 'success', note: 'Include Location header with the URI of the new resource.' },
+  { action: 'Task accepted for asynchronous / background processing', code: 202, name: 'Accepted', category: 'success', note: 'Return a job ID or status URL to poll.' },
+  { action: 'Deleted a resource or action completed with no response body', code: 204, name: 'No Content', category: 'success', note: 'Typical response for DELETE requests.' },
+  { action: 'Cached copy is still fresh (Conditional GET with ETag)', code: 304, name: 'Not Modified', category: 'redirection', note: 'Saves bandwidth when client passes If-None-Match.' },
+  { action: 'Client sent malformed JSON or unparseable query syntax', code: 400, name: 'Bad Request', category: 'client-error', note: 'The server could not even decode the request structure.' },
+  { action: 'Missing or invalid token / credentials', code: 401, name: 'Unauthorized', category: 'client-error', note: 'Requires WWW-Authenticate header.' },
+  { action: 'Authenticated, but user does not have permission', code: 403, name: 'Forbidden', category: 'client-error', note: 'Server knows who you are, but denies access.' },
+  { action: 'Target ID or endpoint does not exist', code: 404, name: 'Not Found', category: 'client-error', note: 'Also used intentionally instead of 403 to avoid leaking resource existence.' },
+  { action: 'HTTP method not supported on this endpoint (e.g. POST to a GET-only route)', code: 405, name: 'Method Not Allowed', category: 'client-error', note: 'Must include Allow header listing valid methods.' },
+  { action: 'Conflict with current resource state (e.g. edit conflict or duplicate slug)', code: 409, name: 'Conflict', category: 'client-error', note: 'Include diff or conflict details in response body.' },
+  { action: 'Resource was intentionally deleted permanently', code: 410, name: 'Gone', category: 'client-error', note: 'Tells caches and search engines never to request this again.' },
+  { action: 'Valid JSON syntax, but values failed business validation rules', code: 422, name: 'Unprocessable Content', category: 'client-error', note: 'The standard choice for form and input validation errors.' },
+  { action: 'Client sent too many requests in a given time window', code: 429, name: 'Too Many Requests', category: 'client-error', note: 'Always include Retry-After header with seconds to wait.' },
+  { action: 'Unhandled exception or crash in application code', code: 500, name: 'Internal Server Error', category: 'server-error', note: 'Log stack trace internally; avoid leaking sensitive debug traces to client.' },
+  { action: 'Reverse proxy / load balancer cannot connect to upstream app', code: 502, name: 'Bad Gateway', category: 'server-error', note: 'Check if app server process is running and socket/port is open.' },
+  { action: 'Server is temporarily overloaded or undergoing maintenance', code: 503, name: 'Service Unavailable', category: 'server-error', note: 'Include Retry-After header so clients know when maintenance ends.' },
+  { action: 'Reverse proxy timed out waiting for slow upstream response', code: 504, name: 'Gateway Timeout', category: 'server-error', note: 'Check for slow database queries, external API calls, or connection pool exhaustion.' },
+];
+---
+<BaseLayout title={title} description={description} canonicalPath="/guide">
+  <div class="guide-hero wrap">
+    <nav aria-label="Breadcrumb" class="guide-breadcrumb">
+      <a href="/">← Back to Status Codes</a>
+    </nav>
+    <h1>Which HTTP Status Code Should I Use?</h1>
+    <p class="lede">
+      A pragmatic decision guide and cheatsheet for REST API designers. Cut through the ambiguity
+      of status codes, avoid anti-patterns, and choose the exact right response for every scenario.
+    </p>
+  </div>
+
+  <div class="wrap guide-body">
+    <section class="guide-section" aria-labelledby="quick-selector">
+      <div class="section-heading">
+        <h2 id="quick-selector">⚡ Quick Decision Matrix</h2>
+        <span class="count">Common API scenarios and the exact recommended code</span>
+      </div>
+
+      <div class="matrix-table-wrap">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th scope="col">If your endpoint scenario is...</th>
+              <th scope="col">Return</th>
+              <th scope="col">Design Guideline</th>
+            </tr>
+          </thead>
+          <tbody>
+            {decisionMatrix.map((row) => (
+              <tr>
+                <td class="scenario-cell">{row.action}</td>
+                <td class="code-cell">
+                  <a href={`/${row.code}`} class={`matrix-code-badge badge-${row.category}`}>
+                    <strong class="mono">{row.code}</strong> {row.name}
+                  </a>
+                </td>
+                <td class="note-cell">{row.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="guide-section" aria-labelledby="dilemmas-heading">
+      <div class="section-heading">
+        <h2 id="dilemmas-heading">🥊 The Great Status Code Dilemmas</h2>
+        <span class="count">Deep-dive comparisons for the most debated decisions</span>
+      </div>
+
+      <div class="dilemmas-grid">
+        {dilemmas.map((d) => (
+          <article class="dilemma-card">
+            <header class="dilemma-header">
+              <h3>{d.title}</h3>
+              <p>{d.summary}</p>
+            </header>
+
+            <div class="rule-box">
+              <span class="rule-tag">Golden Rule</span>
+              <p>{d.rule}</p>
+            </div>
+
+            <div class="comparison-table-wrap">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Aspect</th>
+                    <th scope="col"><a href={`/${d.codeA.code}`}>{d.codeA.code} {d.codeA.name}</a></th>
+                    <th scope="col"><a href={`/${d.codeB.code}`}>{d.codeB.code} {d.codeB.name}</a></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.table.map((row) => (
+                    <tr>
+                      <th scope="row">{row.aspect}</th>
+                      <td>{row.a}</td>
+                      <td>{row.b}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <section class="guide-section" aria-labelledby="anti-patterns-heading">
+      <div class="section-heading">
+        <h2 id="anti-patterns-heading">🚫 4 Anti-Patterns to Avoid in REST APIs</h2>
+      </div>
+
+      <div class="antipatterns-grid">
+        <div class="antipattern-card">
+          <h3>1. The "200 OK with error: true" Trap</h3>
+          <p>
+            Returning <code>HTTP 200</code> with a body like <code>{"{"}success: false, error: "Not found"{"}"}</code> breaks HTTP caching,
+            monitoring tools, and API gateway routing. Caches will store the "error" as a successful response, and uptime monitors will report 100% health while your users are failing.
+          </p>
+          <div class="fix-tag">Fix: Use real 4xx/5xx status codes so the HTTP protocol works for you.</div>
+        </div>
+
+        <div class="antipattern-card">
+          <h3>2. Using 401 when user lacks permission</h3>
+          <p>
+            Returning 401 to a logged-in user who simply lacks admin role triggers client-side redirect loops back to the login page. The user logs in again, gets redirected back, and gets 401 again.
+          </p>
+          <div class="fix-tag">Fix: Return 403 Forbidden for insufficient permissions, not 401.</div>
+        </div>
+
+        <div class="antipattern-card">
+          <h3>3. Returning 500 for client input errors</h3>
+          <p>
+            Letting an unhandled database unique constraint crash into a 500 triggers PagerDuty alerts for your on-call team when the user simply submitted a duplicate username.
+          </p>
+          <div class="fix-tag">Fix: Catch validation and duplicate errors and return 422 or 409 Conflict.</div>
+        </div>
+
+        <div class="antipattern-card">
+          <h3>4. Using 200 for newly created resources</h3>
+          <p>
+            Returning 200 for a resource creation leaves the client guessing what the new resource's URI is.
+          </p>
+          <div class="fix-tag">Fix: Return 201 Created with a <code>Location: /api/users/123</code> response header.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>

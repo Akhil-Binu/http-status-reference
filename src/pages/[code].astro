@@ -1,0 +1,297 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CategoryBadge from '../components/CategoryBadge.astro';
+import Snippet from '../components/Snippet.astro';
+import { statusCodes, getStatusCode } from '../data/statusCodes';
+
+export function getStaticPaths() {
+  return statusCodes.map((entry) => ({
+    params: { code: String(entry.code) },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+
+const title = `${entry.code} ${entry.name} — What It Means & How to Fix It`;
+const description = `${entry.summary} Learn what causes HTTP ${entry.code} ${entry.name}, how to fix it as a user or developer, and how it relates to other status codes.`;
+
+const relatedEntries = entry.related
+  .map((r) => ({ ...r, target: getStatusCode(r.code) }))
+  .filter((r) => r.target);
+
+const site = Astro.site?.toString().replace(/\/$/, '') ?? 'https://http.dev';
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: `HTTP ${entry.code} ${entry.name}`,
+    description: entry.summary,
+    url: `${site}/${entry.code}`,
+    about: {
+      '@type': 'Thing',
+      name: `HTTP ${entry.code} ${entry.name}`,
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'HTTP Status Reference', item: site + '/' },
+      { '@type': 'ListItem', position: 2, name: `${entry.code} ${entry.name}`, item: `${site}/${entry.code}` },
+    ],
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: `What does HTTP ${entry.code} ${entry.name} mean?`,
+        acceptedAnswer: { '@type': 'Answer', text: entry.explanation },
+      },
+      {
+        '@type': 'Question',
+        name: `Is HTTP ${entry.code} safe to retry?`,
+        acceptedAnswer: { '@type': 'Answer', text: entry.retryNote },
+      },
+    ],
+  },
+];
+
+const retryLabel = { yes: 'Yes', no: 'No', conditional: 'Depends' }[entry.retrySafe];
+const cacheLabel = { yes: 'Yes', no: 'No', conditional: 'Depends' }[entry.cacheable];
+const specLinkText = entry.standard ? 'RFC Specification ↗' : 'Reference ↗';
+
+const currentIndex = statusCodes.findIndex((s) => s.code === entry.code);
+const prevEntry = currentIndex > 0 ? statusCodes[currentIndex - 1] : null;
+const nextEntry = currentIndex < statusCodes.length - 1 ? statusCodes[currentIndex + 1] : null;
+
+function buildRawHttpResponse(codeItem: typeof entry): string {
+  const lines: string[] = [`HTTP/1.1 ${codeItem.code} ${codeItem.name}`];
+  lines.push('Date: Wed, 09 Sep 2026 17:30:00 GMT');
+  lines.push('Server: web-origin/2.4');
+
+  if (codeItem.category === 'redirection') {
+    lines.push('Location: https://example.com/target-path');
+  }
+  if (codeItem.code === 401) {
+    lines.push('WWW-Authenticate: Bearer realm="api", error="invalid_token"');
+  }
+  if (codeItem.code === 405) {
+    lines.push('Allow: GET, POST, HEAD');
+  }
+  if (codeItem.code === 429 || codeItem.code === 503) {
+    lines.push('Retry-After: 60');
+  }
+  if (codeItem.code === 101) {
+    lines.push('Upgrade: websocket');
+    lines.push('Connection: Upgrade');
+    return lines.join('\r\n');
+  }
+
+  if (codeItem.code === 204 || codeItem.code === 304 || codeItem.category === 'informational' || codeItem.code === 444) {
+    return lines.join('\r\n');
+  } else if (codeItem.category === 'success') {
+    lines.push('Content-Type: application/json; charset=utf-8');
+    const bodyObj = {
+      status: codeItem.code,
+      message: codeItem.summary,
+      timestamp: '2026-09-09T17:30:00.000Z',
+    };
+    const bodyStr = JSON.stringify(bodyObj, null, 2);
+    lines.push(`Content-Length: ${new TextEncoder().encode(bodyStr).length}`);
+    lines.push('Connection: keep-alive');
+    return `${lines.join('\r\n')}\r\n\r\n${bodyStr}`;
+  } else {
+    lines.push('Content-Type: application/json; charset=utf-8');
+    const bodyObj = {
+      statusCode: codeItem.code,
+      error: codeItem.name,
+      message: codeItem.summary,
+    };
+    const bodyStr = JSON.stringify(bodyObj, null, 2);
+    lines.push(`Content-Length: ${new TextEncoder().encode(bodyStr).length}`);
+    lines.push('Connection: keep-alive');
+    return `${lines.join('\r\n')}\r\n\r\n${bodyStr}`;
+  }
+}
+
+const rawResponse = buildRawHttpResponse(entry);
+const curlCommand = `curl -i https://httpstat.us/${entry.code}`;
+const markdownLink = `[${entry.code} ${entry.name}](${site}/${entry.code})`;
+---
+<BaseLayout title={title} description={description} canonicalPath={`/${entry.code}`} jsonLd={jsonLd} ogType="article">
+  <div class="wrap detail-top-bar">
+    <nav aria-label="Breadcrumb">
+      <a href="/" class="back-link">← All status codes</a>
+    </nav>
+    <div class="detail-actions">
+      <button type="button" class="copy-btn mini-btn" data-copy-text={`${site}/${entry.code}`}>Copy URL</button>
+      <button type="button" class="copy-btn mini-btn" data-copy-text={markdownLink}>Copy Markdown</button>
+      <button type="button" class="copy-btn mini-btn" data-copy-text={`${entry.code} ${entry.name}`}>Copy Code</button>
+    </div>
+  </div>
+
+  <header class="detail-hero">
+    <div class="wrap">
+      <span class="code-num">{entry.code}</span>
+      <h1>{entry.name}</h1>
+      <p class="summary">{entry.summary}</p>
+      <div class="detail-meta">
+        <CategoryBadge category={entry.category} />
+        <span class="pill">{entry.standard ? 'IETF standard' : 'Non-standard'}</span>
+        <span class="pill">Retry-safe: <strong>{retryLabel}</strong></span>
+        <span class="pill">Cacheable: <strong>{cacheLabel}</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="detail-body wrap">
+    <section class="detail-section" aria-labelledby="what-it-means">
+      <h2 id="what-it-means">What the server is actually saying</h2>
+      <p>{entry.explanation}</p>
+    </section>
+
+    <section class="detail-section" aria-labelledby="when-you-see-it">
+      <h2 id="when-you-see-it">When you'll see this</h2>
+      <ul>
+        {entry.scenarios.map((s) => <li>{s}</li>)}
+      </ul>
+    </section>
+
+    <section class="detail-section" aria-labelledby="causes">
+      <h2 id="causes">Common causes</h2>
+      <div class="causes-grid">
+        {entry.causes.client.length > 0 && (
+          <div class="cause-col">
+            <h3>Client-side</h3>
+            <ul>{entry.causes.client.map((c) => <li>{c}</li>)}</ul>
+          </div>
+        )}
+        {entry.causes.server.length > 0 && (
+          <div class="cause-col">
+            <h3>Server-side</h3>
+            <ul>{entry.causes.server.map((c) => <li>{c}</li>)}</ul>
+          </div>
+        )}
+        {entry.causes.intermediary.length > 0 && (
+          <div class="cause-col">
+            <h3>In between (proxy / CDN / DNS)</h3>
+            <ul>{entry.causes.intermediary.map((c) => <li>{c}</li>)}</ul>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <section class="detail-section" aria-labelledby="how-to-fix">
+      <h2 id="how-to-fix">How to fix it</h2>
+      <div class="two-col">
+        <div class="track">
+          <h3>If you're an end user</h3>
+          <ol>{entry.fixes.user.map((f) => <li>{f}</li>)}</ol>
+        </div>
+        <div class="track">
+          <h3>If you're a developer / sysadmin</h3>
+          <ol>{entry.fixes.developer.map((f) => <li>{f}</li>)}</ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail-section" aria-labelledby="wire-protocol">
+      <h2 id="wire-protocol">Raw HTTP response &amp; terminal testing</h2>
+      <div class="snippet wire-snippet">
+        <div class="snippet-header">
+          <span>HTTP/1.1 Wire Protocol</span>
+          <button type="button" class="copy-btn" data-copy-target={`raw-http-${entry.code}`}>Copy Wire Response</button>
+        </div>
+        <pre tabindex="0" role="region" aria-label="Raw HTTP wire response, scrollable"><code id={`raw-http-${entry.code}`}>{rawResponse}</code></pre>
+      </div>
+
+      <div class="snippet curl-snippet">
+        <div class="snippet-header">
+          <span>Test in Terminal (cURL)</span>
+          <button type="button" class="copy-btn" data-copy-target={`curl-${entry.code}`}>Copy cURL</button>
+        </div>
+        <pre tabindex="0" role="region" aria-label="cURL test command, scrollable"><code id={`curl-${entry.code}`}>{curlCommand}</code></pre>
+      </div>
+    </section>
+
+    {entry.snippets && (entry.snippets.nginx || entry.snippets.apache || entry.snippets.express) && (
+      <section class="detail-section" aria-labelledby="config-snippets">
+        <h2 id="config-snippets">Config snippets</h2>
+        {entry.snippets.nginx && (
+          <Snippet id={`nginx-${entry.code}`} label="nginx" code={entry.snippets.nginx} />
+        )}
+        {entry.snippets.apache && (
+          <Snippet id={`apache-${entry.code}`} label="Apache" code={entry.snippets.apache} />
+        )}
+        {entry.snippets.express && (
+          <Snippet id={`express-${entry.code}`} label="Express (Node.js)" code={entry.snippets.express} />
+        )}
+      </section>
+    )}
+
+    <section class="detail-section" aria-labelledby="facts">
+      <h2 id="facts">Quick facts</h2>
+      <table class="facts">
+        <tbody>
+          <tr>
+            <th scope="row">Spec reference</th>
+            <td><a href={entry.specUrl} target="_blank" rel="noopener noreferrer">{specLinkText}</a></td>
+          </tr>
+          <tr>
+            <th scope="row">Related headers</th>
+            <td>
+              {entry.headers.length === 0 && 'None specific to this code.'}
+              {entry.headers.map((h) => (
+                <div><code>{h.name}</code> — {h.note}</div>
+              ))}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">Safe to retry?</th>
+            <td>{entry.retryNote}</td>
+          </tr>
+          <tr>
+            <th scope="row">Cacheable?</th>
+            <td>{entry.cacheNote}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    {relatedEntries.length > 0 && (
+      <section class="detail-section" aria-labelledby="related">
+        <h2 id="related">Related & commonly confused codes</h2>
+        <ul class="related-list">
+          {relatedEntries.map((r) => (
+            <li>
+              <a href={`/${r.code}`}>{r.code} {r.target?.name}</a>
+              <p>{r.note}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <nav class="pagination-nav" aria-label="Adjacent status codes">
+      {prevEntry ? (
+        <a href={`/${prevEntry.code}`} class="page-nav-link prev">
+          <span class="nav-direction">← Previous Code</span>
+          <span class="nav-title"><strong class="mono" style={`color: var(--cat-${prevEntry.category})`}>{prevEntry.code}</strong> {prevEntry.name}</span>
+        </a>
+      ) : <div class="page-nav-empty" />}
+
+      {nextEntry ? (
+        <a href={`/${nextEntry.code}`} class="page-nav-link next">
+          <span class="nav-direction">Next Code →</span>
+          <span class="nav-title"><strong class="mono" style={`color: var(--cat-${nextEntry.category})`}>{nextEntry.code}</strong> {nextEntry.name}</span>
+        </a>
+      ) : <div class="page-nav-empty" />}
+    </nav>
+  </div>
+
+  <script is:inline src="/scripts/copy.js"></script>
+</BaseLayout>

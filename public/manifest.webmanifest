@@ -1,0 +1,12 @@
+{
+  "name": "HTTP Status Reference",
+  "short_name": "HTTP Status",
+  "description": "A complete, offline-capable reference for every HTTP status code.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#12141a",
+  "theme_color": "#12141a",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

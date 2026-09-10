@@ -1,0 +1,44 @@
+---
+import type { StatusCode } from '../data/types';
+
+export interface Props {
+  entry: StatusCode;
+}
+
+const { entry } = Astro.props;
+
+function getProvider(item: StatusCode): string | null {
+  if (item.standard) return null;
+  const text = (item.name + ' ' + item.keywords.join(' ') + ' ' + item.summary).toLowerCase();
+  if (text.includes('cloudflare')) return 'Cloudflare';
+  if (text.includes('nginx')) return 'nginx';
+  if (text.includes('aws')) return 'AWS';
+  if (text.includes('iis')) return 'IIS';
+  if (text.includes('laravel')) return 'Laravel';
+  if (text.includes('twitter')) return 'Twitter';
+  if (text.includes('shopify')) return 'Shopify';
+  if (text.includes('apache')) return 'Apache';
+  return 'Custom';
+}
+
+const provider = getProvider(entry);
+---
+<a
+  href={`/${entry.code}`}
+  class="code-card"
+  data-card-category={entry.category}
+  data-card-standard={entry.standard ? 'standard' : 'nonstandard'}
+>
+  <div class="code-card-top">
+    <span class="code-num" style={`color: var(--cat-${entry.category})`}>{entry.code}</span>
+    <div class="badges-row">
+      {provider && <span class="badge badge-provider">{provider}</span>}
+      <span class={`badge badge-${entry.category}`}>
+        <span class="dot" aria-hidden="true"></span>
+        {entry.category === 'client-error' ? 'Client' : entry.category === 'server-error' ? 'Server' : entry.category.charAt(0).toUpperCase() + entry.category.slice(1)}
+      </span>
+    </div>
+  </div>
+  <h3>{entry.name}</h3>
+  <p>{entry.summary}</p>
+</a>

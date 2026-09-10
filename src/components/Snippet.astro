@@ -1,0 +1,16 @@
+---
+export interface Props {
+  id: string;
+  label: string;
+  code: string;
+}
+
+const { id, label, code } = Astro.props;
+---
+<div class="snippet">
+  <div class="snippet-header">
+    <span>{label}</span>
+    <button type="button" class="copy-btn" data-copy-target={id}>Copy</button>
+  </div>
+  <pre tabindex="0" role="region" aria-label={`${label} code snippet, scrollable`}><code id={id}>{code}</code></pre>
+</div>

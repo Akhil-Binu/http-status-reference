@@ -1,0 +1,14 @@
+---
+import { getCategoryMeta } from '../data/statusCodes';
+
+export interface Props {
+  category: string;
+}
+
+const { category } = Astro.props;
+const meta = getCategoryMeta(category);
+---
+<span class={`badge badge-${category}`}>
+  <span class="dot" aria-hidden="true"></span>
+  {meta?.label ?? category}
+</span>

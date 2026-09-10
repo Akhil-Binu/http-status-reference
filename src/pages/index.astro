@@ -1,0 +1,112 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StatusCard from '../components/StatusCard.astro';
+import { statusCodes, categories, mostCommonCodes, getStatusCode } from '../data/statusCodes';
+
+const title = 'HTTP Status Reference — Every HTTP Status Code Explained';
+const description =
+  'A complete, searchable reference for every HTTP status code — 1xx through 5xx, including non-standard nginx and Cloudflare codes — with causes, fixes, and code snippets for developers.';
+
+const mostCommon = mostCommonCodes.map((c) => getStatusCode(c)).filter(Boolean);
+const standardCount = statusCodes.filter((s) => s.standard).length;
+const nonStandardCount = statusCodes.filter((s) => !s.standard).length;
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'HTTP Status Reference',
+    url: Astro.site?.toString(),
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${Astro.site?.toString().replace(/\/$/, '')}/?q={search_term_string}`,
+      'query-input': 'required name=search_term_string',
+    },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'HTTP Status Codes',
+    itemListElement: statusCodes.map((s, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: `${Astro.site?.toString().replace(/\/$/, '')}/${s.code}`,
+      name: `${s.code} ${s.name}`,
+    })),
+  },
+];
+---
+<BaseLayout title={title} description={description} canonicalPath="/" jsonLd={jsonLd}>
+  <section class="hero wrap">
+    <h1>Every HTTP status code, explained — and how to fix it.</h1>
+    <p class="lede">
+      Search by number, name, or symptom ("my API returns nothing", "login keeps failing").
+      {statusCodes.length} codes covering RFC 9110 plus the non-standard nginx, Cloudflare, and
+      AWS codes you'll actually run into in production.
+    </p>
+    <div class="hero-actions">
+      <div class="stats-pills">
+        <span class="stat-pill"><strong>{statusCodes.length}</strong> Codes</span>
+        <span class="stat-pill"><strong>{standardCount}</strong> RFC Standard</span>
+        <span class="stat-pill"><strong>{nonStandardCount}</strong> Non-standard</span>
+      </div>
+      <a href="/guide" class="hero-guide-banner">
+        <span class="guide-banner-icon">🧭</span>
+        <span class="guide-banner-text">
+          <strong>REST API Decision Guide &amp; Cheatsheet</strong>
+          <span>Which status code should you return? 401 vs 403, 400 vs 422, 201 vs 204 &rarr;</span>
+        </span>
+      </a>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="most-common-heading">
+    <div class="section-heading">
+      <h2 id="most-common-heading">Most Common</h2>
+      <span class="count">{mostCommon.length} codes developers hit every day</span>
+    </div>
+    <div class="code-grid">
+      {mostCommon.map((entry) => entry && <StatusCard entry={entry} />)}
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="browse-heading">
+    <div class="section-heading">
+      <h2 id="browse-heading">Browse All Status Codes</h2>
+      <span class="count">{statusCodes.length} total</span>
+    </div>
+
+    <div class="filter-chips" id="filter-chips" role="group" aria-label="Filter by category">
+      <button class="chip" type="button" data-category="all" aria-pressed="true">
+        All ({statusCodes.length})
+      </button>
+      {categories.map((cat) => {
+        const count = statusCodes.filter((s) => s.category === cat.id).length;
+        return (
+          <button class="chip" type="button" data-category={cat.id} aria-pressed="false">
+            {cat.range} {cat.label} ({count})
+          </button>
+        );
+      })}
+      <button class="chip" type="button" data-category="nonstandard" aria-pressed="false">
+        ⚡ Non-standard ({nonStandardCount})
+      </button>
+    </div>
+
+    <p id="filter-empty" hidden class="search-empty">No status codes in this category.</p>
+
+    {categories.map((cat) => {
+      const codesInCategory = statusCodes.filter((s) => s.category === cat.id);
+      return (
+        <div data-section-category={cat.id}>
+          <h3 class="visually-hidden">{cat.range} {cat.label}</h3>
+          <div class="code-grid">
+            {codesInCategory.map((entry) => <StatusCard entry={entry} />)}
+          </div>
+        </div>
+      );
+    })}
+  </section>
+
+  <script is:inline src="/scripts/filters.js"></script>
+</BaseLayout>
